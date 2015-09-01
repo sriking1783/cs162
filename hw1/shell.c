@@ -156,6 +156,7 @@ void exec_process(char* inputString)
   int pipe_from_child[2];
   char *command ;
   char buf[256];
+  char parent_buf[256];
   char* buf_pointer = malloc(sizeof(char)*(257));
   char* file = NULL;
   while ((token = strsep(&inputString, "-")) != NULL)
@@ -172,11 +173,16 @@ void exec_process(char* inputString)
   int pID = fork();
   if (pID == 0){
     char *path = get_path_from_file(tofree[0]);
+    if(i > 2){
+      read(pipe_to_child[0], parent_buf, sizeof(parent_buf)); 
+      printf("%s\n", parent_buf);
+    }
     strcat(path, "/");
     strcat(path, tofree[0]);
     strcat(path,path_file);
     command = tofree[0];
     close(pipe_to_child[1]);
+    close(pipe_from_child[0]);
     dup2(pipe_to_child[0], fileno(stdin));
     dup2(pipe_from_child[1], fileno(stdout));
     execl(path, command, tofree[1] , NULL);
@@ -189,7 +195,9 @@ void exec_process(char* inputString)
   }
   else {
     int returnStatus;
-
+    if(i>2){
+      write(pipe_to_child[1], tofree[3], 10);
+    }
     close(pipe_to_child[0]);
     waitpid(pID, &returnStatus, 0);
     read(pipe_from_child[0], buf, sizeof(buf));
@@ -228,7 +236,6 @@ int shell (int argc, char *argv[]) {
   lineNum=0;
   char cwd[1024];
   char* inputString;
-  //int in, out;
   fprintf(stdout, "%s: ", current_directory());
   while ((s = freadln(stdin))){
     t = getToks(s); /* break the line into tokens */
@@ -236,7 +243,7 @@ int shell (int argc, char *argv[]) {
     if(fundex >= 0) cmd_table[fundex].fun(&t[1]);
     else {
       int length_t = sizeof(t)/sizeof(t[0]);
-   
+      printf("%s %s\n",t[1], t[2]); 
       if(t[2] != NULL && strcmp(t[2], ">") == 0)
       {
         inputString = malloc(strlen(t[0]) + strlen(t[1]) + strlen(t[2]) + strlen(t[3]) + 1); 
@@ -248,19 +255,22 @@ int shell (int argc, char *argv[]) {
         strcat(inputString, "-");
         strcat(inputString, t[3]);
       } 
-      else
+      else if(strcmp(t[1], "<") == 0)
+      {
+        inputString = malloc(strlen(t[0]) + strlen(t[1]) + strlen(t[2]) + 1); 
+        strcpy(inputString, t[0]);
+        strcat(inputString, "-");
+        strcat(inputString, t[2]);
+      }
+      else 
       {
         inputString = malloc(strlen(t[0]) + strlen(t[1]) + 1); 
         strcpy(inputString, t[0]);
         strcat(inputString, "-");
         strcat(inputString, t[1]);
       }
-      //printf("%s\n", inputString);
-      //dup2(out, 1);
-      //close(out);
+      printf("%s \n", inputString);
       exec_process(inputString);
-      //printf("%s %s %s %d %d %d\n", t[0], t[1], t[2], sizeof(t), sizeof(int), t[2] == ">");
-      // fprintf(stdout, "This shell only supports built-ins. Replace this to run programs as commands.\n");
     }
     fprintf(stdout, "%s: ", current_directory());
   }
