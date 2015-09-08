@@ -135,6 +135,9 @@ void init_shell()
 void add_process(process* p)
 {
   /** YOUR CODE HERE */
+  printf("My process ID : %d\n", getpid());
+  printf("My parent's ID: %d\n", getppid());
+
 }
 
 /**
@@ -144,6 +147,7 @@ process* create_process(char* inputString)
 {
   /** YOUR CODE HERE */
 }
+
 
 void exec_process(char* inputString)
 {
@@ -171,11 +175,12 @@ void exec_process(char* inputString)
   pipe(pipe_to_child);
   pipe(pipe_from_child);
   int pID = fork();
+  pid_t pid;
   if (pID == 0){
     char *path = get_path_from_file(tofree[0]);
     if(i > 2){
       read(pipe_to_child[0], parent_buf, sizeof(parent_buf)); 
-      printf("%s\n", parent_buf);
+      //printf("%s\n", parent_buf);
     }
     strcat(path, "/");
     strcat(path, tofree[0]);
@@ -199,7 +204,14 @@ void exec_process(char* inputString)
       write(pipe_to_child[1], tofree[3], 10);
     }
     close(pipe_to_child[0]);
-    waitpid(pID, &returnStatus, 0);
+    //waitpid(WAIT_ANY, &returnStatus, WNOHANG);
+    do
+      pid = waitpid (WAIT_ANY, &returnStatus, WUNTRACED|WNOHANG);
+    while (!mark_process_status (pid, returnStatus));
+    process *p;
+    for(p = first_process; p; p = p->next){
+      printf("%d\n ", p->status); 
+    }  
     read(pipe_from_child[0], buf, sizeof(buf));
     *buf_pointer = buf;
     if(i>2){  
@@ -228,7 +240,16 @@ int shell (int argc, char *argv[]) {
   pid_t pid = getpid();		/* get current processes PID */
   pid_t ppid = getppid();	/* get parents PID */
   pid_t cpid, tcpid, cpgid;
-
+  char *status;
+  char* proc = "/proc/";
+  char str_pid[10];
+  snprintf(str_pid, 10, "%d", ppid);
+  char* out = (char*)malloc(strlen(proc) + strlen(str_pid) + 1);
+  strcpy(out, proc);
+  strcat(out, str_pid);
+  strcat(out, "/status");
+  struct stat sts;
+  char str[80] ;
   init_shell();
 
   printf("%s running as PID %d under %d\n",argv[0],pid,ppid);
@@ -243,7 +264,6 @@ int shell (int argc, char *argv[]) {
     if(fundex >= 0) cmd_table[fundex].fun(&t[1]);
     else {
       int length_t = sizeof(t)/sizeof(t[0]);
-      printf("%s %s\n",t[1], t[2]); 
       if(t[2] != NULL && strcmp(t[2], ">") == 0)
       {
         inputString = malloc(strlen(t[0]) + strlen(t[1]) + strlen(t[2]) + strlen(t[3]) + 1); 
@@ -269,7 +289,6 @@ int shell (int argc, char *argv[]) {
         strcat(inputString, "-");
         strcat(inputString, t[1]);
       }
-      printf("%s \n", inputString);
       exec_process(inputString);
     }
     fprintf(stdout, "%s: ", current_directory());

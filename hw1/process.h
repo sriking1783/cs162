@@ -27,4 +27,5 @@ void launch_process(process* p);
 void put_process_in_background (process* p, int cont);
 void put_process_in_foreground (process* p, int cont);
 
+int mark_process_status (pid_t pid, int status);
 #endif
