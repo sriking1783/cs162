@@ -110,7 +110,9 @@ void init_shell()
   shell_is_interactive = isatty(shell_terminal);
 
   if(shell_is_interactive){
-
+     struct sigaction new_action, old_action;  
+     signal(SIGINT, SIG_IGN);
+     signal(SIGTSTP, SIG_IGN);
     /* force into foreground */
     while(tcgetpgrp (shell_terminal) != (shell_pgid = getpgrp()))
       kill( - shell_pgid, SIGTTIN);
@@ -121,10 +123,21 @@ void init_shell()
       perror("Couldn't put the shell in its own process group");
       exit(1);
     }
-
+    
     /* Take control of the terminal */
     tcsetpgrp(shell_terminal, shell_pgid);
     tcgetattr(shell_terminal, &shell_tmodes);
+
+    first_process = (process *)malloc(sizeof(process));
+    first_process->pid = getpid();
+    first_process->stopped = 0;
+    first_process->completed = 0;
+    first_process->background = 0;
+    //tcgetattr(shell_terminal, &first_process->tmodes);
+    first_process->stdin = STDIN_FILENO;
+    first_process->stdout = STDOUT_FILENO;
+    first_process->stderr = STDERR_FILENO;
+    first_process->prev = first_process->next = NULL;
   }
   /** YOUR CODE HERE */
 }
@@ -135,21 +148,59 @@ void init_shell()
 void add_process(process* p)
 {
   /** YOUR CODE HERE */
-  printf("My process ID : %d\n", getpid());
-  printf("My parent's ID: %d\n", getppid());
+  process *q = first_process;
+  while (q->next) {
+    q=q->next;
+  }
+  q->next = p;
+  p->prev = q;
 
 }
 
 /**
  * Creates a process given the inputString from stdin
  */
-process* create_process(char* inputString)
+process* create_process(tok_t *t)
 {
   /** YOUR CODE HERE */
+  process* procInfo = (process *)malloc(sizeof(process));
+  int i = 0;
+  int total_toks = 0;
+
+  if (t == NULL || t[0] == NULL || strlen(t[0]) == 0)
+    return NULL;
+
+  procInfo->stdin = STDIN_FILENO;
+  procInfo->stdout = STDOUT_FILENO;
+  procInfo->stderr = STDERR_FILENO;
+  procInfo->argv = t;
+  total_toks = totalToks(t);
+  procInfo->completed = 0;
+  procInfo->stopped = 0;
+  procInfo->background = 0;
+  procInfo->status = 0;
+  //procInfo->tmodes = ;
+  procInfo->next = NULL;
+  procInfo->prev = NULL;
+  if(strcmp(t[1], "<") == 0)
+  {
+    FILE *inputFile;
+    if ((inputFile = fopen(t[3], "r")) != NULL) {
+      procInfo->stdin = fileno(inputFile);
+    }
+  }
+  else if(t[2] != NULL && strcmp(t[2], ">") == 0)
+  {
+    FILE *outputFile;
+    if ((outputFile = fopen(t[2], "w")) != NULL) {
+      procInfo->stdout = fileno(outputFile);
+    }
+  }
+  return procInfo;
 }
 
 
-void exec_process(char* inputString)
+void exec_process(char* inputString, process* proc)
 {
 
   char* token;
@@ -188,6 +239,8 @@ void exec_process(char* inputString)
     command = tofree[0];
     close(pipe_to_child[1]);
     close(pipe_from_child[0]);
+    //dup2(proc->stdin, fileno(stdin));
+    //dup2(proc->stdout, fileno(stdout));
     dup2(pipe_to_child[0], fileno(stdin));
     dup2(pipe_from_child[1], fileno(stdout));
     execl(path, command, tofree[1] , NULL);
@@ -263,7 +316,7 @@ int shell (int argc, char *argv[]) {
     fundex = lookup(t[0]); /* Is first token a shell literal */
     if(fundex >= 0) cmd_table[fundex].fun(&t[1]);
     else {
-      int length_t = sizeof(t)/sizeof(t[0]);
+      process *p = create_process(t);
       if(t[2] != NULL && strcmp(t[2], ">") == 0)
       {
         inputString = malloc(strlen(t[0]) + strlen(t[1]) + strlen(t[2]) + strlen(t[3]) + 1); 
@@ -289,7 +342,7 @@ int shell (int argc, char *argv[]) {
         strcat(inputString, "-");
         strcat(inputString, t[1]);
       }
-      exec_process(inputString);
+      exec_process(inputString, p);
     }
     fprintf(stdout, "%s: ", current_directory());
   }

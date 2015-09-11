@@ -41,3 +41,37 @@ mark_process_status (pid_t pid, int status)
   }
   return -1; 
 }
+
+void
+put_process_in_foreground (process *p, int cont)
+{
+  int status;
+  /* Put the job into the foreground.  */
+  tcsetpgrp (shell_terminal, p->pid);
+  /* Send the job a continue signal, if necessary.  */
+  if (cont)
+    {
+      tcsetattr (shell_terminal, TCSADRAIN, &p->tmodes);
+      if (kill (- p->pid, SIGCONT) < 0)
+        perror ("kill (SIGCONT)");
+    }
+  /* Wait for it to report.  */
+   waitpid(WAIT_ANY, &status, WUNTRACED);
+
+  /* Put the shell back in the foreground.  */
+  tcsetpgrp (shell_terminal, shell_pgid);
+
+  /* Restore the shell’s terminal modes.  */
+  tcgetattr (shell_terminal, &p->tmodes);
+  tcsetattr (shell_terminal, TCSADRAIN, &shell_tmodes);
+}
+
+
+void
+put_process_in_background (process *p, int cont)
+{
+  /* Send the job a continue signal, if necessary.  */
+/*  if (cont)
+    if (kill (-p->pgid, SIGCONT) < 0)
+      perror ("kill (SIGCONT)");*/
+}
