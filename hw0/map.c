@@ -4,7 +4,7 @@
 int foo;            /* a staticly allocated variable */
 
 int recur(int i) {      /* a recursive function */
-    int j = i;            /* a stack allocated variable within a recursive function */
+    int j = &i;            /* a stack allocated variable within a recursive function */
     printf("recur call %d: stack@ %lx\n", i, j); /* fix this so it prints the address of j */
     if (i > 0) {
         return recur(i-1);

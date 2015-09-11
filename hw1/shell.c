@@ -192,7 +192,8 @@ process* create_process(tok_t *t)
   else if(t[2] != NULL && strcmp(t[2], ">") == 0)
   {
     FILE *outputFile;
-    if ((outputFile = fopen(t[2], "w")) != NULL) {
+    printf("%s\n", t[3]);
+    if ((outputFile = fopen(t[3], "w")) != NULL) {
       procInfo->stdout = fileno(outputFile);
     }
   }
@@ -207,11 +208,10 @@ void exec_process(char* inputString, process* proc)
   int i = 0;
   char *tofree[4];
   char path_file[1000] = "" ;
-  int pipe_to_child[2];
-  int pipe_from_child[2];
   char *command ;
   char buf[256];
   char parent_buf[256];
+  int returnStatus;
   char* buf_pointer = malloc(sizeof(char)*(257));
   char* file = NULL;
   while ((token = strsep(&inputString, "-")) != NULL)
@@ -220,68 +220,30 @@ void exec_process(char* inputString, process* proc)
     tofree[i] = token;
     i = i + 1;
   }
-  if(i>2){
-    file = tofree[3];
-  }
-  pipe(pipe_to_child);
-  pipe(pipe_from_child);
-  int pID = fork();
-  pid_t pid;
-  if (pID == 0){
-    char *path = get_path_from_file(tofree[0]);
-    if(i > 2){
-      read(pipe_to_child[0], parent_buf, sizeof(parent_buf)); 
-      //printf("%s\n", parent_buf);
-    }
-    strcat(path, "/");
-    strcat(path, tofree[0]);
-    strcat(path,path_file);
-    command = tofree[0];
-    close(pipe_to_child[1]);
-    close(pipe_from_child[0]);
-    //dup2(proc->stdin, fileno(stdin));
-    //dup2(proc->stdout, fileno(stdout));
-    dup2(pipe_to_child[0], fileno(stdin));
-    dup2(pipe_from_child[1], fileno(stdout));
+  char *path = get_path_from_file(tofree[0]);
+  pid_t pid, pID;
+  strcat(path, "/");
+  strcat(path, tofree[0]);
+  strcat(path,path_file);
+  command = tofree[0];
+  pID = fork();
+  if(pID > 0)
+  {
+    dup2(proc->stdin, STDIN_FILENO);
+    dup2(proc->stdout, STDOUT_FILENO);
     execl(path, command, tofree[1] , NULL);
-    *path = NULL;
-    
-    exit(0);
   }
   else if(pID < 0){
-    perror("Error1: ");
+    perror("Error: ");
   }
   else {
-    int returnStatus;
-    if(i>2){
-      write(pipe_to_child[1], tofree[3], 10);
-    }
-    close(pipe_to_child[0]);
-    //waitpid(WAIT_ANY, &returnStatus, WNOHANG);
-    do
-      pid = waitpid (WAIT_ANY, &returnStatus, WUNTRACED|WNOHANG);
-    while (!mark_process_status (pid, returnStatus));
-    process *p;
-    for(p = first_process; p; p = p->next){
-      printf("%d\n ", p->status); 
-    }  
-    read(pipe_from_child[0], buf, sizeof(buf));
-    *buf_pointer = buf;
-    if(i>2){  
-      FILE *fp;
-      fp = fopen(file, "w");
-      if (fp == NULL)
-      {
-        perror("Error: ") ;
-        exit(1);
-      }
-      fprintf(fp, "%s", buf);
-      fclose(fp);
-    }
-    else{
-      printf("%s", buf);
-    }
-    free(buf_pointer);
+  *path = NULL;
+ int ret_status ;
+   do{
+     pid = waitpid (WAIT_ANY, &returnStatus, WUNTRACED|WNOHANG);
+     ret_status = mark_process_status (pid, returnStatus);
+     printf("status returned %d\n", ret_status);
+   }while (!ret_status);
   }
 }
 
@@ -343,6 +305,7 @@ int shell (int argc, char *argv[]) {
         strcat(inputString, t[1]);
       }
       exec_process(inputString, p);
+      printf("executed\n");
     }
     fprintf(stdout, "%s: ", current_directory());
   }
