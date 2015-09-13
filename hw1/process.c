@@ -11,14 +11,14 @@
  * If the shell is in interactive mode and the process is a foreground process,
  * then p should take control of the terminal.
  */
-void launch_process(process *p)
+void launch_process(char* inputString, process* proc)
 {
   /** YOUR CODE HERE */
+
 }
 
 
-int
-mark_process_status (pid_t pid, int status)
+int mark_process_status (pid_t pid, int status)
 {
   process *p;
   if (pid > 0){
@@ -42,8 +42,7 @@ mark_process_status (pid_t pid, int status)
   return -1; 
 }
 
-void
-put_process_in_foreground (process *p, int cont)
+void put_process_in_foreground (process *p, int cont)
 {
   int status;
   /* Put the job into the foreground.  */
@@ -67,11 +66,10 @@ put_process_in_foreground (process *p, int cont)
 }
 
 
-void
-put_process_in_background (process *p, int cont)
+void put_process_in_background (process *p, int cont)
 {
   /* Send the job a continue signal, if necessary.  */
-/*  if (cont)
-    if (kill (-p->pgid, SIGCONT) < 0)
-      perror ("kill (SIGCONT)");*/
+  if (cont)
+    if (kill (-p->pid, SIGCONT) < 0)
+      perror ("kill (SIGCONT)");
 }

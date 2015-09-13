@@ -197,13 +197,24 @@ process* create_process(tok_t *t)
       procInfo->stdout = fileno(outputFile);
     }
   }
+
+  else if(t[total_toks - 1] == '&'){
+     procInfo->background = 1;
+  }
   return procInfo;
 }
 
+void update_status (void) {
+  int status;
+  pid_t pid;
+
+  do {
+    pid = waitpid(WAIT_ANY, &status, WUNTRACED|WNOHANG);
+  } while (!mark_process_status(pid, status));
+}
 
 void exec_process(char* inputString, process* proc)
 {
-
   char* token;
   int i = 0;
   char *tofree[4];
@@ -226,25 +237,9 @@ void exec_process(char* inputString, process* proc)
   strcat(path, tofree[0]);
   strcat(path,path_file);
   command = tofree[0];
-  pID = fork();
-  if(pID > 0)
-  {
-    dup2(proc->stdin, STDIN_FILENO);
-    dup2(proc->stdout, STDOUT_FILENO);
-    execl(path, command, tofree[1] , NULL);
-  }
-  else if(pID < 0){
-    perror("Error: ");
-  }
-  else {
-  *path = NULL;
- int ret_status ;
-   do{
-     pid = waitpid (WAIT_ANY, &returnStatus, WUNTRACED|WNOHANG);
-     ret_status = mark_process_status (pid, returnStatus);
-     printf("status returned %d\n", ret_status);
-   }while (!ret_status);
-  }
+  dup2(proc->stdin, STDIN_FILENO);
+  dup2(proc->stdout, STDOUT_FILENO);
+  execl(path, command, tofree[1] , NULL);
 }
 
 int shell (int argc, char *argv[]) {
@@ -279,34 +274,53 @@ int shell (int argc, char *argv[]) {
     if(fundex >= 0) cmd_table[fundex].fun(&t[1]);
     else {
       process *p = create_process(t);
-      if(t[2] != NULL && strcmp(t[2], ">") == 0)
-      {
-        inputString = malloc(strlen(t[0]) + strlen(t[1]) + strlen(t[2]) + strlen(t[3]) + 1); 
-        strcpy(inputString, t[0]);
-        strcat(inputString, "-");
-        strcat(inputString, t[1]);
-        strcat(inputString, "-");
-        strcat(inputString, t[2]);
-        strcat(inputString, "-");
-        strcat(inputString, t[3]);
-      } 
-      else if(strcmp(t[1], "<") == 0)
-      {
-        inputString = malloc(strlen(t[0]) + strlen(t[1]) + strlen(t[2]) + 1); 
-        strcpy(inputString, t[0]);
-        strcat(inputString, "-");
-        strcat(inputString, t[2]);
-      }
-      else 
-      {
-        inputString = malloc(strlen(t[0]) + strlen(t[1]) + 1); 
-        strcpy(inputString, t[0]);
-        strcat(inputString, "-");
-        strcat(inputString, t[1]);
-      }
-      exec_process(inputString, p);
-      printf("executed\n");
+      if (p != NULL) {
+        add_process(p);
+        pid_t pid = fork();
+         if(t[2] != NULL && strcmp(t[2], ">") == 0)
+         {
+           inputString = malloc(strlen(t[0]) + strlen(t[1]) + strlen(t[2]) + strlen(t[3]) + 1); 
+           strcpy(inputString, t[0]);
+           strcat(inputString, "-");
+           strcat(inputString, t[1]);
+           strcat(inputString, "-");
+           strcat(inputString, t[2]);
+           strcat(inputString, "-");
+           strcat(inputString, t[3]);
+        } 
+        else if(strcmp(t[1], "<") == 0)
+        {
+          inputString = malloc(strlen(t[0]) + strlen(t[1]) + strlen(t[2]) + 1); 
+          strcpy(inputString, t[0]);
+          strcat(inputString, "-");
+          strcat(inputString, t[2]);
+        }
+        else 
+        {
+          inputString = malloc(strlen(t[0]) + strlen(t[1]) + 1); 
+          strcpy(inputString, t[0]);
+          strcat(inputString, "-");
+          strcat(inputString, t[1]);
+        }
+        if (pid > 0) {  /* parent process */
+          p->pid = pid;
+          setpgid(pid, pid);
+          printf("Run process: %s on pid: %d %d\n", t[0], p->pid, p->background);
+          if (!p->background) {
+            put_process_in_foreground(p, 0);
+          }
+          printf("Executed\n");
+        }
+        else if (pid == 0) {  /* child process */
+          if (p != NULL) {
+            p->pid = getpid();
+            exec_process(inputString, p);
+          }
+          //exec_process(inputString, p);
+        }
+      } //printf("executed\n");
     }
+    update_status();
     fprintf(stdout, "%s: ", current_directory());
   }
   return 0;
